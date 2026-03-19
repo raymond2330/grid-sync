@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.log
+.git
+.env
+.venv/
+.pytest_cache/
+.mypy_cache/
+celerybeat-schedule
