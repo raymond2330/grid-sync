@@ -13,6 +13,7 @@
 - Environment preparation: [docs/ENVIRONMENT_PREPARATION.md](docs/ENVIRONMENT_PREPARATION.md)
 - Team access and onboarding: [docs/SETUP_AND_ACCESS.md](docs/SETUP_AND_ACCESS.md)
 - Testing guide: [docs/TESTING.md](docs/TESTING.md)
+- Architecture and progress tracker: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Quick Start
 
