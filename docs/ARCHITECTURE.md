@@ -90,6 +90,9 @@ Update this section during each sprint review.
 - [x] Celery app is configured and worker task discovery is active.
 - [x] Baseline Celery task exists (`grid_sync.ping`).
 - [x] Backend auth test suite exists for signup/signin success and failure paths.
+- [x] Backend NASA lookback endpoint is implemented at `POST /api/v1/nasa/ensure-lookback`.
+- [x] NASA lookback ingestion persists data in PostgreSQL table `WeatherExogenous` with upsert behavior.
+- [x] NASA fetch is conditional and runs only when lookback coverage is missing (default 7 days at 5-minute resolution).
 - [x] Frontend app boots successfully (currently scaffold/default UI).
 - [ ] Forecasting pipelines are not yet implemented in runtime code.
 - [ ] Unit commitment logic, cost function, and optimization algorithm are not yet implemented in runtime code.
