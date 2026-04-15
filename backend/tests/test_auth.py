@@ -1,6 +1,14 @@
+from pathlib import Path
+import sys
+
 from fastapi.testclient import TestClient
 
-import main
+
+repo_root = Path(__file__).resolve().parents[2]
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+import backend.main as main
 
 
 client = TestClient(main.app)
