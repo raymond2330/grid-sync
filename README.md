@@ -14,6 +14,7 @@
 - Team access and onboarding: [docs/SETUP_AND_ACCESS.md](docs/SETUP_AND_ACCESS.md)
 - Testing guide: [docs/TESTING.md](docs/TESTING.md)
 - NASA POWER data fetch/resampling guide: [docs/NASA_POWER_DATA.md](docs/NASA_POWER_DATA.md)
+- Forecasting runtime guide: [docs/FORECASTING.md](docs/FORECASTING.md)
 - Architecture and progress tracker: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Quick Start

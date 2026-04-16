@@ -1,0 +1,41 @@
+{
+    "data_path": "../../../dataset/price/price_nasa_selected2.csv",
+    "target_column": "RTD_LMP_SMP",
+    "window_size": 2016,
+    "horizon": 288,
+    "n_features": 11,
+    "train_end": "2023-12-25 23:55:00",
+    "val_end": "2024-11-25 23:55:00",
+    "stride": 12,
+    "device": "cuda",
+    "seed": 1337,
+    "tpe_enabled": false,
+    "optimized_params": {
+        "d_model": 128,
+        "nhead": 8,
+        "num_layers": 4,
+        "dim_feedforward": 256,
+        "dropout": 0.1,
+        "learning_rate": 0.0005,
+        "batch_size": 32
+    },
+    "model_params": {
+        "model_type": "Transformer",
+        "d_model": 128,
+        "nhead": 8,
+        "num_layers": 4,
+        "dim_feedforward": 256,
+        "dropout": 0.1
+    },
+    "optimizer": "AdamW",
+    "learning_rate": 0.0005,
+    "weight_decay": 1e-05,
+    "batch_size": 32,
+    "num_workers": 2,
+    "total_epochs": 50,
+    "warmup_epochs": 15,
+    "early_stopping_patience": 10,
+    "early_stopping_delta": 0.0001,
+    "loss_function": "HuberLoss",
+    "huber_delta": 1.0
+}

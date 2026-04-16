@@ -1,0 +1,97 @@
+{
+    "data_path": "../../../dataset/wind/wind_nasa_selected.csv",
+    "target_column": "WS50M",
+    "window_size": 2016,
+    "horizon": 288,
+    "n_features": 11,
+    "train_end": "2023-12-25 23:55:00",
+    "val_end": "2024-11-25 23:55:00",
+    "stride": 9,
+    "device": "cuda",
+    "seed": 1337,
+    "tpe_enabled": true,
+    "optimized_params": {
+        "d_model": 64,
+        "nhead": 2,
+        "num_layers": 2,
+        "dim_feedforward": 326,
+        "dropout": 0.0972549274242738,
+        "learning_rate": 0.0011664394705241897,
+        "batch_size": 16,
+        "weight_decay": 1.0533025798250208e-06,
+        "huber_delta": 1.1129144309161045
+    },
+    "model_params": {
+        "model_type": "Transformer",
+        "d_model": 64,
+        "nhead": 2,
+        "num_layers": 2,
+        "dim_feedforward": 326,
+        "dropout": 0.0972549274242738
+    },
+    "optimizer": "AdamW",
+    "learning_rate": 0.0011664394705241897,
+    "weight_decay": 1e-05,
+    "batch_size": 16,
+    "num_workers": 2,
+    "total_epochs": 100,
+    "warmup_epochs": 20,
+    "early_stopping_patience": 25,
+    "early_stopping_delta": 0.0001,
+    "loss_function": "HuberLoss",
+    "huber_delta": 1.0,
+    "tpe_config": {
+        "n_trials": 15,
+        "epochs_per_eval": 10,
+        "pruning_enabled": true,
+        "pruning_patience": 8,
+        "pruning_interval": 8,
+        "search_bounds": {
+            "d_model": {
+                "min": 32,
+                "max": 256,
+                "type": "int_power2"
+            },
+            "nhead": {
+                "min": 2,
+                "max": 8,
+                "type": "int_power2"
+            },
+            "num_layers": {
+                "min": 1,
+                "max": 4,
+                "type": "int"
+            },
+            "dim_feedforward": {
+                "min": 256,
+                "max": 512,
+                "type": "int"
+            },
+            "dropout": {
+                "min": 0.0,
+                "max": 0.5,
+                "type": "float"
+            },
+            "learning_rate": {
+                "min": 1e-05,
+                "max": 0.01,
+                "type": "log"
+            },
+            "batch_size": {
+                "min": 16,
+                "max": 64,
+                "type": "int_power2"
+            },
+            "weight_decay": {
+                "min": 1e-06,
+                "max": 0.001,
+                "type": "log"
+            },
+            "huber_delta": {
+                "min": 0.5,
+                "max": 2.0,
+                "type": "float"
+            }
+        }
+    }
+}

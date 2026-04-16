@@ -13,8 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 try:
+    from app.routers.forecast import router as forecast_router
     from app.routers.nasa import router as nasa_router
 except ModuleNotFoundError:
+    from backend.app.routers.forecast import router as forecast_router
     from backend.app.routers.nasa import router as nasa_router
 
 load_dotenv()
@@ -183,6 +185,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(forecast_router)
 app.include_router(nasa_router)
 
 

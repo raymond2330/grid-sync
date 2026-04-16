@@ -94,7 +94,7 @@ Update this section during each sprint review.
 - [x] NASA lookback ingestion persists data in PostgreSQL table `WeatherExogenous` with upsert behavior.
 - [x] NASA fetch is conditional and runs only when lookback coverage is missing (default 7 days at 5-minute resolution).
 - [x] Frontend app boots successfully (currently scaffold/default UI).
-- [ ] Forecasting pipelines are not yet implemented in runtime code.
+- [x] Baseline transformer forecasting endpoints are implemented at `POST /api/v1/forecast/demand` and `POST /api/v1/forecast/weather`.
 - [ ] Unit commitment logic, cost function, and optimization algorithm are not yet implemented in runtime code.
 
 ### 4.2 Next Work (Detailed Implementation Backlog)
@@ -109,11 +109,11 @@ Update this section during each sprint review.
 
 ##### Electricity Demand Forecasting
 
-- [ ] Accept user CSV upload containing exactly the past 7 days of electricity demand data.
-- [ ] Validate time resolution is 5 minutes and enforce the required lookback window (7 x 24 x 12 = 2,016 expected points).
-- [ ] Preprocess demand series (algorithm/logic to be provided later).
-- [ ] Pull NASA POWER data for the same timeline to use as exogenous inputs.
-- [ ] Align demand target and NASA exogenous features into one training/inference dataset.
+- [x] Accept user CSV upload containing exactly the past 7 days of electricity demand data.
+- [x] Validate time resolution is 5 minutes and enforce the required lookback window (7 x 24 x 12 = 2,016 expected points).
+- [x] Preprocess demand series for inference (MinMax feature/target scaling aligned with transformer runtime input contract).
+- [x] Pull NASA POWER-derived weather features from the canonical `WeatherExogenous` table for the same timeline.
+- [x] Align demand target and NASA exogenous features into one inference dataset.
 
 ##### Electricity Price Forecasting
 
@@ -125,39 +125,39 @@ Update this section during each sprint review.
 
 ##### Wind Speed Forecasting
 
-- [ ] Source data from NASA POWER API.
-- [ ] Convert NASA hourly data to 5-minute resolution.
-- [ ] Preprocess transformed series (algorithm/logic to be provided later).
-- [ ] Use `WS50M` as the forecasting target variable.
+- [x] Source data from NASA POWER-ingested records in `WeatherExogenous`.
+- [x] Consume NASA data already transformed to 5-minute resolution by the ingestion pipeline.
+- [x] Preprocess transformed series for inference with MinMax scaling.
+- [x] Use `WS50M` as the forecasting target variable.
 
 ##### Solar Irradiance Forecasting
 
-- [ ] Source data from NASA POWER API.
-- [ ] Convert NASA hourly data to 5-minute resolution.
-- [ ] Preprocess transformed series (algorithm/logic to be provided later).
-- [ ] Use `ALLSKY_SFC_SW_DWN` as the forecasting target variable.
+- [x] Source data from NASA POWER-ingested records in `WeatherExogenous`.
+- [x] Consume NASA data already transformed to 5-minute resolution by the ingestion pipeline.
+- [x] Preprocess transformed series for inference with MinMax scaling.
+- [x] Use `ALLSKY_SFC_SW_DWN` as the forecasting target variable.
 
 ##### Temperature Forecasting
 
-- [ ] Source data from NASA POWER API.
-- [ ] Convert NASA hourly data to 5-minute resolution.
-- [ ] Preprocess transformed series (algorithm/logic to be provided later).
-- [ ] Use `T2M` as the forecasting target variable.
+- [x] Source data from NASA POWER-ingested records in `WeatherExogenous`.
+- [x] Consume NASA data already transformed to 5-minute resolution by the ingestion pipeline.
+- [x] Preprocess transformed series for inference with MinMax scaling.
+- [x] Use `T2M` as the forecasting target variable.
 
 #### C) Data Ingestion, Persistence, and Overlap Rules
 
 - [ ] Save raw data (before forecasting) in PostgreSQL.
-- [ ] Save forecasted data in PostgreSQL.
+- [x] Save forecasted data in PostgreSQL (`ForecastRun`, `ForecastPrediction`).
 - [ ] Save unit commitment inputs/outputs in PostgreSQL.
 - [ ] Handle overlapping historical windows with a latest-wins canonical record policy (upsert by series key + timestamp).
 - [ ] Keep ingestion history/audit records so each run is still traceable even when canonical rows are overwritten.
 
 #### D) Forecast Readiness Checks (Before Running Any Forecast)
 
-- [ ] When user selects a forecast day, check if raw data coverage exists for required lookback window.
-- [ ] Require at least 7 days of history at 5-minute resolution before allowing forecast execution (minimum 2,016 points per required target series).
-- [ ] If data is insufficient, block run and return clear instruction to upload/fetch missing range first.
-- [ ] If data is sufficient, continue directly to preprocessing and forecast generation.
+- [x] When user selects a forecast day, check if raw data coverage exists for required lookback window.
+- [x] Require at least 7 days of history at 5-minute resolution before allowing forecast execution (minimum 2,016 points per required target series).
+- [x] If data is insufficient, block run and return clear instruction to upload/fetch missing range first.
+- [x] If data is sufficient, continue directly to preprocessing and forecast generation.
 
 #### E) Unit Commitment and Optimization
 
@@ -175,10 +175,10 @@ Update this section during each sprint review.
 
 #### G) Testing and Observability
 
-- [ ] Expand backend tests beyond auth (ingestion, forecasting, unit commitment APIs).
+- [x] Expand backend tests beyond auth (NASA lookback and forecasting route coverage).
 - [ ] Add integration tests for PostgreSQL, Redis, and Celery-backed workflows.
 - [ ] Add structured logging and request/job correlation IDs.
 - [ ] Add dashboards/alerts for worker failures and queue backlog.
 
-Current top blocker: _finalize preprocessing rules and canonical timestamp/upsert policy before building the first production forecasting pipeline_.
+Current top blocker: _finalize production-grade target data sourcing for price forecasting and settle canonical preprocessing for cross-model benchmarking_.
 
