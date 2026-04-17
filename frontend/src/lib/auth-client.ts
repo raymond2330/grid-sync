@@ -5,6 +5,11 @@ export type SignUpPayload = {
   password: string;
 };
 
+export type SignInPayload = {
+  email: string;
+  password: string;
+};
+
 export type AuthResponse = {
   access_token: string;
   token_type: string;
@@ -89,6 +94,31 @@ export async function signUp(payload: SignUpPayload): Promise<AuthResponse> {
 
   if (!response.ok) {
     const fallback = `Signup failed with status ${response.status}`;
+    const errorDetail =
+      typeof parsedBody === "object" && parsedBody !== null && "detail" in parsedBody
+        ? parseDetail(parsedBody.detail, fallback)
+        : fallback;
+
+    throw new ApiRequestError(errorDetail, response.status);
+  }
+
+  return parsedBody as AuthResponse;
+}
+
+export async function signIn(payload: SignInPayload): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/signin`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  const parsedBody = await parseJsonResponse(response);
+
+  if (!response.ok) {
+    const fallback = `Signin failed with status ${response.status}`;
     const errorDetail =
       typeof parsedBody === "object" && parsedBody !== null && "detail" in parsedBody
         ? parseDetail(parsedBody.detail, fallback)

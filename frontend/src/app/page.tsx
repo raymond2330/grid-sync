@@ -22,14 +22,12 @@ export default function Home() {
           >
             Create account
           </Link>
-          {/* <a
-            href={`${apiBaseUrl}/docs`}
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href="/login"
             className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-500"
           >
-            View backend API docs
-          </a> */}
+            Sign in
+          </Link>
         </div>
       </div>
     </main>

@@ -105,53 +105,53 @@ export default function SignupForm() {
           </p>
         </div>
 
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-2 text-sm text-slate-700" htmlFor="first-name">
-              <span className="font-medium">First name</span>
+        <form className="space-y-6" onSubmit={handleSubmit}>
+          <div className="grid gap-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-2 text-sm text-slate-700" htmlFor="first-name">
+                <span className="font-medium">First name</span>
+                <input
+                  id="first-name"
+                  value={form.firstName}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, firstName: event.target.value }));
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-teal-200 transition focus:border-teal-400 focus:ring"
+                  autoComplete="given-name"
+                  required
+                />
+              </label>
+
+              <label className="space-y-2 text-sm text-slate-700" htmlFor="last-name">
+                <span className="font-medium">Last name</span>
+                <input
+                  id="last-name"
+                  value={form.lastName}
+                  onChange={(event) => {
+                    setForm((prev) => ({ ...prev, lastName: event.target.value }));
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-teal-200 transition focus:border-teal-400 focus:ring"
+                  autoComplete="family-name"
+                  required
+                />
+              </label>
+            </div>
+
+            <label className="space-y-2 text-sm text-slate-700" htmlFor="email">
+              <span className="font-medium">Email</span>
               <input
-                id="first-name"
-                value={form.firstName}
+                id="email"
+                type="email"
+                value={form.email}
                 onChange={(event) => {
-                  setForm((prev) => ({ ...prev, firstName: event.target.value }));
+                  setForm((prev) => ({ ...prev, email: event.target.value }));
                 }}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-teal-200 transition focus:border-teal-400 focus:ring"
-                autoComplete="given-name"
+                autoComplete="email"
                 required
               />
             </label>
 
-            <label className="space-y-2 text-sm text-slate-700" htmlFor="last-name">
-              <span className="font-medium">Last name</span>
-              <input
-                id="last-name"
-                value={form.lastName}
-                onChange={(event) => {
-                  setForm((prev) => ({ ...prev, lastName: event.target.value }));
-                }}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-teal-200 transition focus:border-teal-400 focus:ring"
-                autoComplete="family-name"
-                required
-              />
-            </label>
-          </div>
-
-          <label className="space-y-2 text-sm text-slate-700" htmlFor="email">
-            <span className="font-medium">Email</span>
-            <input
-              id="email"
-              type="email"
-              value={form.email}
-              onChange={(event) => {
-                setForm((prev) => ({ ...prev, email: event.target.value }));
-              }}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-teal-200 transition focus:border-teal-400 focus:ring"
-              autoComplete="email"
-              required
-            />
-          </label>
-
-          <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-2 text-sm text-slate-700" htmlFor="password">
               <span className="font-medium">Password</span>
               <input
@@ -185,26 +185,32 @@ export default function SignupForm() {
             </label>
           </div>
 
-          {passwordMismatch ? (
-            <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              Passwords must match before you can submit.
-            </p>
+          {passwordMismatch || serverError ? (
+            <div className="space-y-3">
+              {passwordMismatch ? (
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  Passwords must match before you can submit.
+                </p>
+              ) : null}
+
+              {serverError ? (
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {serverError}
+                </p>
+              ) : null}
+            </div>
           ) : null}
 
-          {serverError ? (
-            <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              {serverError}
-            </p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-          >
-            {isSubmitting ? "Creating account..." : "Create account"}
-            <span className="transition-transform group-hover:translate-x-0.5">→</span>
-          </button>
+          <div className="pt-1">
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+            >
+              {isSubmitting ? "Creating account..." : "Create account"}
+              <span className="transition-transform group-hover:translate-x-0.5">→</span>
+            </button>
+          </div>
         </form>
 
         {account ? (
@@ -219,13 +225,24 @@ export default function SignupForm() {
           </div>
         ) : null}
 
-        <p className="text-sm text-slate-600">
-          Already registered?{" "}
-          <Link href="/" className="font-semibold text-teal-700 underline-offset-4 hover:underline">
-            Return to home
+        <div className="space-y-2 text-sm text-slate-600">
+          <p>
+            Already registered?{" "}
+            <Link
+              href="/login"
+              className="font-semibold text-teal-700 underline-offset-4 hover:underline"
+            >
+              Sign in
+            </Link>
+            .
+          </p>
+          <Link
+            href="/"
+            className="inline-flex font-semibold text-teal-700 underline-offset-4 hover:underline"
+          >
+            Back to home
           </Link>
-          .
-        </p>
+        </div>
       </div>
     </div>
   );
