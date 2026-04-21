@@ -45,7 +45,7 @@ export default function DashboardPage() {
   return (
     <main className="relative isolate min-h-screen overflow-hidden px-4 py-14 sm:px-8 sm:py-20">
       <div className="pointer-events-none absolute inset-0 -z-20 bg-[radial-gradient(circle_at_16%_20%,#a7f3d0_0%,transparent_32%),radial-gradient(circle_at_88%_18%,#bae6fd_0%,transparent_30%),linear-gradient(130deg,#f8fafc_0%,#ecfeff_46%,#f0fdf4_100%)]" />
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 rounded-[2rem] border border-white/70 bg-white/70 p-7 shadow-[0_35px_100px_-45px_rgba(15,23,42,0.65)] backdrop-blur-xl sm:p-10">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 rounded-4xl border border-white/70 bg-white/70 p-7 shadow-[0_35px_100px_-45px_rgba(15,23,42,0.65)] backdrop-blur-xl sm:p-10">
         <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-2">
             <p className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
@@ -84,9 +84,17 @@ export default function DashboardPage() {
             <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
               Forecasting
             </h2>
-            <p className="mt-3 text-sm text-slate-700">
-              Demand, weather, and model-run features can be surfaced here next.
-            </p>
+            <div className="mt-3 flex flex-col gap-2">
+              <p className="text-sm text-slate-700">
+                Open the dedicated forecasting workspace from here.
+              </p>
+              <Link
+                href="/forecasting"
+                className="text-sm font-semibold text-emerald-700 underline-offset-4 hover:underline"
+              >
+                Go to forecasting workspace
+              </Link>
+            </div>
           </article>
 
           <article className="rounded-2xl border border-slate-200 bg-white/85 p-5">
@@ -105,6 +113,12 @@ export default function DashboardPage() {
                 className="text-sm font-semibold text-emerald-700 underline-offset-4 hover:underline"
               >
                 Sign in page
+              </Link>
+              <Link
+                href="/forecasting"
+                className="text-sm font-semibold text-emerald-700 underline-offset-4 hover:underline"
+              >
+                Forecasting workspace
               </Link>
             </div>
           </article>
