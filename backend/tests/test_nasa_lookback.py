@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import sys
+import json
+from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
 
@@ -11,6 +13,7 @@ if str(repo_root) not in sys.path:
 
 import backend.main as main
 import backend.app.routers.nasa as nasa_router_module
+import backend.app.services.nasa_power as nasa_power_service
 
 
 client = TestClient(main.app)
@@ -93,3 +96,53 @@ def test_ensure_lookback_value_error_maps_to_422(monkeypatch):
     )
 
     assert response.status_code == 422
+
+
+def test_fetch_hourly_frame_requests_full_weather_parameter_set(monkeypatch):
+    captured = {}
+
+    class _FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            parameter_payload = {
+                column: {"2026041500": 1.0}
+                for column in nasa_power_service.WEATHER_EXOGENOUS_COLUMNS
+            }
+            return json.dumps({"properties": {"parameter": parameter_payload}}).encode("utf-8")
+
+    captured_urls: list[str] = []
+
+    def _fake_urlopen(request_url, timeout):
+        captured_urls.append(request_url)
+        captured["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setattr(nasa_power_service, "urlopen", _fake_urlopen)
+
+    frame = nasa_power_service._fetch_hourly_frame(
+        dataset="demand",
+        latitude=14.5995,
+        longitude=120.9842,
+        request_start=datetime(2026, 4, 9, 0, 0, tzinfo=UTC),
+        request_end=datetime(2026, 4, 16, 0, 0, tzinfo=UTC),
+        community="RE",
+        timezone="UTC",
+        timeout=120,
+    )
+
+    requested_columns: list[str] = []
+    for request_url in captured_urls:
+        parsed_url = urlparse(request_url)
+        params = parse_qs(parsed_url.query)
+        chunk_columns = params["parameters"][0].split(",")
+        assert len(chunk_columns) <= nasa_power_service.NASA_POWER_MAX_PARAMETERS_PER_REQUEST
+        requested_columns.extend(chunk_columns)
+
+    assert set(requested_columns) == set(nasa_power_service.WEATHER_EXOGENOUS_COLUMNS)
+    assert len(requested_columns) == len(set(requested_columns))
+    assert list(frame.columns) == list(nasa_power_service.WEATHER_EXOGENOUS_COLUMNS)

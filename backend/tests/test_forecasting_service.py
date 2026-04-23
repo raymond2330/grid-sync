@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import sys
+import re
 from typing import Any
 
 import numpy as np
@@ -67,6 +68,45 @@ class _FakeConfig:
 
 class _FakeLoadedTransformer:
     config = _FakeConfig()
+
+
+class _WeatherFrameCursor:
+    def __init__(self, row: tuple[Any, ...]) -> None:
+        self._row = row
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, query, params):
+        self.query = query
+        self.params = params
+
+    def fetchall(self):
+        return [self._row]
+
+
+class _WeatherFrameConnection:
+    def __init__(self, row: tuple[Any, ...]) -> None:
+        self._row = row
+
+    def cursor(self):
+        return _WeatherFrameCursor(self._row)
+
+
+def _weather_row_for_query(query: str, base_timestamp: datetime) -> tuple[Any, ...]:
+    match = re.search(r"SELECT\s+timestamp,\s*(.+?)\s+FROM", query, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        raise AssertionError("Unable to parse selected weather columns from query")
+
+    raw_columns = [column.strip().strip('"') for column in match.group(1).split(",")]
+    row: list[Any] = [base_timestamp]
+    for index, _column in enumerate(raw_columns, start=1):
+        row.append(float(index))
+
+    return tuple(row)
 
 
 def test_demand_upload_is_upserted_and_reloaded_from_database(monkeypatch, flow_trace):
@@ -231,3 +271,47 @@ def test_demand_upload_is_upserted_and_reloaded_from_database(monkeypatch, flow_
     assert len(captures["persist_predictions"]) == 2
     assert result["run_id"] == 77
     assert len(result["predictions"]) == 2
+
+
+def test_fetch_weather_frame_includes_target_columns_for_supported_datasets():
+    forecast_start = datetime(2026, 4, 16, 0, 0, tzinfo=UTC)
+    expected_index = pd.date_range(start=forecast_start, periods=1, freq="5min", tz=UTC)
+
+    cases = [
+        ("temperature", "T2M"),
+        ("solar", "ALLSKY_SFC_SW_DWN"),
+        ("wind", "WS50M"),
+    ]
+
+    for dataset, target_column in cases:
+        selected_columns = forecasting_service._dataset_exogenous_columns(dataset) + [target_column]
+        query_probe = "SELECT timestamp, " + ", ".join(f'"{column}"' for column in selected_columns) + ' FROM "NASAPower"'
+        row = _weather_row_for_query(query_probe, forecast_start)
+        connection = _WeatherFrameConnection(row)
+
+        frame = forecasting_service._fetch_weather_frame(
+            connection=connection,
+            dataset=dataset,
+            latitude=14.5995,
+            longitude=120.9842,
+            expected_index=expected_index,
+        )
+
+        assert target_column in frame.columns
+    assert float(frame[target_column].iloc[0]) == float(len(selected_columns))
+
+
+def test_price_forecast_requires_price_target_history():
+    forecast_start = datetime(2026, 4, 16, 0, 0, tzinfo=UTC)
+    expected_index = pd.date_range(start=forecast_start - timedelta(days=7), periods=2016, freq="5min", tz=UTC)
+
+    weather_frame = pd.DataFrame(index=expected_index)
+    for column in forecasting_service._dataset_exogenous_columns("price"):
+        weather_frame[column] = 1.0
+
+    try:
+        forecasting_service._build_input_matrix("price", weather_frame, None)
+    except forecasting_service.ForecastServiceError as exc:
+        assert "RTD_LMP_SMP" in str(exc)
+    else:
+        raise AssertionError("Price forecasting should require RTD_LMP_SMP history")

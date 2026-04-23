@@ -42,7 +42,7 @@ curl -X POST http://localhost:8001/api/v1/nasa/ensure-lookback \
 
 ## Persistence Model
 
-Table: `WeatherExogenous`
+Table: `NASAPower`
 
 Stored per row:
 
@@ -53,7 +53,8 @@ Stored per row:
 - `community`
 - `time_standard`
 - `target_feature`
-- `features` (JSON payload of requested variables)
+- one column per canonical NASA POWER weather variable used by the forecasting models
+- `features` (legacy JSON payload retained for compatibility)
 
 Upsert key:
 
@@ -71,3 +72,5 @@ Expected data points:
 - `lookback_days * 24 * 12`
 
 If missing points are detected, the backend fetches NASA hourly data for the required period, resamples to 5-minute resolution with time interpolation, and upserts the missing/overlapping rows.
+
+The ingestion path now requests the full canonical weather parameter set used by the supported forecasting datasets so the wide table stays populated for downstream demand, solar, wind, and temperature forecasts.

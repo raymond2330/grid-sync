@@ -17,9 +17,9 @@ from psycopg2.extras import Json, execute_values
 from sklearn.preprocessing import MinMaxScaler
 
 try:
-    from app.nasa_parameters import DATASET_COLUMNS, TARGET_FEATURE_BY_DATASET
+    from app.nasa_parameters import DATASET_COLUMNS, TARGET_FEATURE_BY_DATASET, WEATHER_EXOGENOUS_COLUMNS
 except ModuleNotFoundError:
-    from backend.app.nasa_parameters import DATASET_COLUMNS, TARGET_FEATURE_BY_DATASET
+    from backend.app.nasa_parameters import DATASET_COLUMNS, TARGET_FEATURE_BY_DATASET, WEATHER_EXOGENOUS_COLUMNS
 
 SUPPORTED_MODEL_FAMILIES = {"transformer"}
 FORECAST_STEP = timedelta(minutes=5)
@@ -269,47 +269,48 @@ def _fetch_weather_frame(
     longitude: float,
     expected_index: pd.DatetimeIndex,
 ) -> pd.DataFrame:
+    feature_columns = _dataset_exogenous_columns(dataset)
+    target_column = _dataset_target(dataset)
+
+    selected_columns = list(feature_columns)
+    if target_column in WEATHER_EXOGENOUS_COLUMNS and target_column not in selected_columns:
+        selected_columns.append(target_column)
+
+    if not selected_columns:
+        raise ForecastServiceError(f"No weather columns configured for dataset '{dataset}'")
+
+    select_columns = ", ".join(f'"{column}"' for column in selected_columns)
     query = """
-    SELECT timestamp, features
-    FROM "WeatherExogenous"
-    WHERE dataset = %s
+SELECT timestamp, {select_columns}
+FROM "NASAPower"
+WHERE dataset = %s
       AND latitude = %s
       AND longitude = %s
       AND timestamp BETWEEN %s AND %s
     ORDER BY timestamp ASC
-    """
+    """.format(select_columns=select_columns)
 
     start = expected_index[0].to_pydatetime()
     end = expected_index[-1].to_pydatetime()
 
     with connection.cursor() as cursor:
-        cursor.execute(query, (dataset, latitude, longitude, start, end))
+        cursor.execute(query, ("weather", latitude, longitude, start, end))
         rows = cursor.fetchall()
 
-    weather_columns = [column for column in DATASET_COLUMNS[dataset] if column != "DATETIME"]
-
     records: list[dict[str, Any]] = []
-    for timestamp, payload in rows:
+    for row_values in rows:
+        timestamp = row_values[0]
         ts = timestamp.replace(tzinfo=UTC) if timestamp.tzinfo is None else timestamp.astimezone(UTC)
 
-        features = payload
-        if isinstance(features, str):
-            try:
-                features = json.loads(features)
-            except json.JSONDecodeError:
-                features = {}
-        if not isinstance(features, dict):
-            features = {}
-
         row: dict[str, Any] = {"timestamp": ts}
-        for column in weather_columns:
-            row[column] = _coerce_float(features.get(column))
+        for index, column in enumerate(selected_columns, start=1):
+            row[column] = _coerce_float(row_values[index])
         records.append(row)
 
     frame = pd.DataFrame.from_records(records)
     if frame.empty:
         frame = pd.DataFrame(index=expected_index)
-        for column in weather_columns:
+        for column in selected_columns:
             frame[column] = np.nan
         return frame
 
@@ -317,12 +318,12 @@ def _fetch_weather_frame(
     frame = frame.set_index("timestamp").sort_index()
     frame = frame[~frame.index.duplicated(keep="last")]
 
-    for column in weather_columns:
+    for column in selected_columns:
         if column not in frame.columns:
             frame[column] = np.nan
 
     frame = frame.reindex(expected_index)
-    return frame[weather_columns]
+    return frame[selected_columns]
 
 
 def _parse_demand_csv(csv_bytes: bytes, expected_index: pd.DatetimeIndex) -> pd.DataFrame:
@@ -383,6 +384,15 @@ def _build_input_matrix(
     feature_columns = _dataset_exogenous_columns(dataset)
 
     if target_override is None:
+        if target_column not in weather_frame.columns:
+            if dataset == "price":
+                raise ForecastServiceError(
+                    "Price target column RTD_LMP_SMP is unavailable in NASAPower. "
+                    "Ingest price target history before running price forecasts."
+                )
+            raise ForecastServiceError(
+                f"Missing target column '{target_column}' in weather lookback for dataset '{dataset}'."
+            )
         target_series = weather_frame[target_column]
     else:
         target_series = target_override.reindex(weather_frame.index)

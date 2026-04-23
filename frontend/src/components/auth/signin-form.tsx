@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
-import { ApiRequestError, signIn, type AuthResponse } from "@/lib/auth-client";
+import { ApiRequestError, signIn } from "@/lib/auth-client";
+import { saveAuthSession } from "@/lib/auth-session";
 
 type SignInFormState = {
   email: string;
@@ -16,10 +18,10 @@ const initialFormState: SignInFormState = {
 };
 
 export default function SigninForm() {
+  const router = useRouter();
   const [form, setForm] = useState<SignInFormState>(initialFormState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [account, setAccount] = useState<AuthResponse | null>(null);
 
   const canSubmit =
     form.email.trim().length > 0 && form.password.length >= 8 && !isSubmitting;
@@ -35,20 +37,9 @@ export default function SigninForm() {
         password: form.password,
       });
 
-      setAccount(response);
       setForm(initialFormState);
-
-      window.localStorage.setItem("grid-sync.accessToken", response.access_token);
-      window.localStorage.setItem(
-        "grid-sync.user",
-        JSON.stringify({
-          user_id: response.user_id,
-          first_name: response.first_name,
-          last_name: response.last_name,
-          email: response.email,
-          role: response.role,
-        }),
-      );
+      saveAuthSession(response);
+      router.replace("/dashboard");
     } catch (error: unknown) {
       if (error instanceof ApiRequestError) {
         setServerError(error.message);
@@ -128,15 +119,6 @@ export default function SigninForm() {
             {/* <span className="transition-transform group-hover:translate-x-0.5">→</span> */}
           </button>
         </form>
-
-        {account ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm text-emerald-800">
-            <p className="font-semibold">Login successful</p>
-            <p className="mt-1">
-              Signed in as {account.first_name} {account.last_name} ({account.email}).
-            </p>
-          </div>
-        ) : null}
 
         <div className="space-y-2 text-sm text-slate-600">
           <p>
