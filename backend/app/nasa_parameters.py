@@ -85,5 +85,22 @@ TARGET_FEATURE_BY_DATASET: Final[dict[str, str]] = {
     "temperature": "T2M",
 }
 
+
+def _build_weather_exogenous_columns() -> tuple[str, ...]:
+    ordered_columns: list[str] = []
+    seen: set[str] = set()
+
+    for columns in DATASET_COLUMNS.values():
+        for column in columns:
+            if column in {"DATETIME", "TOTAL", "RTD_LMP_SMP"} or column in seen:
+                continue
+            seen.add(column)
+            ordered_columns.append(column)
+
+    return tuple(ordered_columns)
+
+
+WEATHER_EXOGENOUS_COLUMNS: Final[tuple[str, ...]] = _build_weather_exogenous_columns()
+
 NON_NASA_COLUMNS: Final[set[str]] = {"DATETIME", "TOTAL", "RTD_LMP_SMP"}
 SUPPORTED_DATASETS: Final[tuple[str, ...]] = tuple(DATASET_COLUMNS.keys())

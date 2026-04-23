@@ -155,7 +155,7 @@ function LookbackResultCard({ result }: { result: LookbackResponse }) {
 export default function ForecastWorkspace() {
   const [demandForm, setDemandForm] = useState<DemandFormState>(initialDemandState);
   const [autoWeatherDatasets, setAutoWeatherDatasets] = useState<WeatherForecastDataset[]>(
-    weatherDatasetOrder,
+    weatherDatasetOrder.filter((dataset) => dataset !== "price"),
   );
 
   const [demandLookback, setDemandLookback] = useState<LookbackResponse | null>(null);

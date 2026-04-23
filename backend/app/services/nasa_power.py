@@ -11,7 +11,7 @@ from urllib.request import urlopen
 
 import pandas as pd
 import psycopg2
-from psycopg2.extras import Json, execute_values
+from psycopg2.extras import execute_values
 
 try:
     from app.nasa_parameters import (
@@ -19,6 +19,7 @@ try:
         NON_NASA_COLUMNS,
         SUPPORTED_DATASETS,
         TARGET_FEATURE_BY_DATASET,
+        WEATHER_EXOGENOUS_COLUMNS,
     )
 except ModuleNotFoundError:
     from backend.app.nasa_parameters import (
@@ -26,11 +27,14 @@ except ModuleNotFoundError:
         NON_NASA_COLUMNS,
         SUPPORTED_DATASETS,
         TARGET_FEATURE_BY_DATASET,
+        WEATHER_EXOGENOUS_COLUMNS,
     )
 
 NASA_POWER_URL = "https://power.larc.nasa.gov/api/temporal/hourly/point"
 SUPPORTED_COMMUNITIES = {"RE", "AG", "SB"}
 SUPPORTED_TIMEZONES = {"UTC", "LST"}
+WEATHER_EXOGENOUS_DATASET = "weather"
+NASA_POWER_MAX_PARAMETERS_PER_REQUEST = 12
 
 
 class NASAServiceError(RuntimeError):
@@ -65,11 +69,21 @@ def _normalize_coordinate(value: float) -> float:
     return round(float(value), 6)
 
 
-def _ensure_weather_exogenous_table(connection: psycopg2.extensions.connection) -> None:
-    ddl = """
-    CREATE TABLE IF NOT EXISTS "WeatherExogenous" (
+def _dataset_nasa_columns(dataset: str) -> list[str]:
+    return [column for column in DATASET_COLUMNS[dataset] if column not in NON_NASA_COLUMNS]
+
+
+def _chunk_columns(columns: list[str], chunk_size: int) -> list[list[str]]:
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than 0")
+    return [columns[index : index + chunk_size] for index in range(0, len(columns), chunk_size)]
+
+
+def _ensure_nasa_power_table(connection: psycopg2.extensions.connection) -> None:
+    create_table_sql = """
+    CREATE TABLE IF NOT EXISTS "NASAPower" (
         exog_id BIGSERIAL PRIMARY KEY,
-        dataset TEXT NOT NULL,
+        dataset TEXT NOT NULL DEFAULT 'weather',
         timestamp TIMESTAMPTZ NOT NULL,
         latitude DOUBLE PRECISION NOT NULL,
         longitude DOUBLE PRECISION NOT NULL,
@@ -77,62 +91,71 @@ def _ensure_weather_exogenous_table(connection: psycopg2.extensions.connection) 
         community TEXT NOT NULL DEFAULT 'RE',
         time_standard TEXT NOT NULL DEFAULT 'UTC',
         target_feature TEXT,
-        features JSONB NOT NULL,
+        features JSONB,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE (dataset, timestamp, latitude, longitude)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_weather_exogenous_dataset_timestamp
-        ON "WeatherExogenous" (dataset, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_nasa_power_dataset_timestamp
+        ON "NASAPower" (dataset, timestamp);
 
-    CREATE INDEX IF NOT EXISTS idx_weather_exogenous_lookup
-        ON "WeatherExogenous" (dataset, latitude, longitude, timestamp);
+    CREATE INDEX IF NOT EXISTS idx_nasa_power_lookup
+        ON "NASAPower" (dataset, latitude, longitude, timestamp);
     """
 
     with connection.cursor() as cursor:
-        cursor.execute(ddl)
+        cursor.execute(create_table_sql)
+        cursor.execute('ALTER TABLE "NASAPower" ALTER COLUMN features DROP NOT NULL;')
+        for column in WEATHER_EXOGENOUS_COLUMNS:
+            cursor.execute(
+                f'ALTER TABLE "NASAPower" ADD COLUMN IF NOT EXISTS "{column}" DOUBLE PRECISION;'
+            )
     connection.commit()
 
 
 def _coverage_stats(
     connection: psycopg2.extensions.connection,
-    dataset: str,
     latitude: float,
     longitude: float,
     lookback_start: datetime,
     lookback_end: datetime,
+    required_columns: list[str],
 ) -> tuple[int, int]:
+    required_not_null = " AND ".join(f'w."{column}" IS NOT NULL' for column in required_columns)
+    required_any_null = " OR ".join(f'w."{column}" IS NULL' for column in required_columns)
+
     existing_query = """
     SELECT COUNT(*)::int
-    FROM "WeatherExogenous"
+    FROM "NASAPower" w
     WHERE dataset = %s
       AND latitude = %s
       AND longitude = %s
       AND timestamp BETWEEN %s AND %s
-    """
+      AND {required_not_null}
+    """.format(required_not_null=required_not_null)
 
     missing_query = """
     SELECT COUNT(*)::int
     FROM generate_series(%s::timestamptz, %s::timestamptz, interval '5 minutes') AS gs(ts)
-    LEFT JOIN "WeatherExogenous" w
+    LEFT JOIN "NASAPower" w
       ON w.dataset = %s
      AND w.latitude = %s
      AND w.longitude = %s
      AND w.timestamp = gs.ts
-    WHERE w.exog_id IS NULL
-    """
+    WHERE w.exog_id IS NULL OR ({required_any_null})
+    """.format(required_any_null=required_any_null)
 
     with connection.cursor() as cursor:
         cursor.execute(
             existing_query,
-            (dataset, latitude, longitude, lookback_start, lookback_end),
+            (WEATHER_EXOGENOUS_DATASET, latitude, longitude, lookback_start, lookback_end),
         )
         existing_points = cursor.fetchone()[0]
 
         cursor.execute(
             missing_query,
-            (lookback_start, lookback_end, dataset, latitude, longitude),
+            (lookback_start, lookback_end, WEATHER_EXOGENOUS_DATASET, latitude, longitude),
         )
         missing_points = cursor.fetchone()[0]
 
@@ -149,54 +172,54 @@ def _fetch_hourly_frame(
     timezone: str,
     timeout: int,
 ) -> pd.DataFrame:
-    dataset_columns = DATASET_COLUMNS[dataset]
-    nasa_columns = [column for column in dataset_columns if column not in NON_NASA_COLUMNS]
-
-    query = {
-        "parameters": ",".join(sorted(set(nasa_columns))),
-        "community": community,
-        "longitude": longitude,
-        "latitude": latitude,
-        "start": request_start.strftime("%Y%m%d"),
-        "end": request_end.strftime("%Y%m%d"),
-        "format": "JSON",
-        "time-standard": timezone,
-    }
-    request_url = f"{NASA_POWER_URL}?{urlencode(query)}"
-
-    try:
-        with urlopen(request_url, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        raise NASAServiceError(
-            f"NASA POWER request failed with status {exc.code}"
-        ) from exc
-    except URLError as exc:
-        raise NASAServiceError(f"NASA POWER request failed: {exc}") from exc
-
-    parameter_values = payload.get("properties", {}).get("parameter", {})
-    if not isinstance(parameter_values, dict):
-        raise NASAServiceError("NASA POWER response did not contain parameter data")
-
+    nasa_columns = list(WEATHER_EXOGENOUS_COLUMNS)
     series_by_column: dict[str, pd.Series] = {}
-    for column in nasa_columns:
-        raw_values = parameter_values.get(column, {})
-        if not isinstance(raw_values, dict):
-            raw_values = {}
 
-        series = pd.Series(raw_values, name=column)
-        if series.empty:
-            series_by_column[column] = pd.Series(dtype="float64")
-            continue
+    for chunk in _chunk_columns(nasa_columns, NASA_POWER_MAX_PARAMETERS_PER_REQUEST):
+        query = {
+            "parameters": ",".join(chunk),
+            "community": community,
+            "longitude": longitude,
+            "latitude": latitude,
+            "start": request_start.strftime("%Y%m%d"),
+            "end": request_end.strftime("%Y%m%d"),
+            "format": "JSON",
+            "time-standard": timezone,
+        }
+        request_url = f"{NASA_POWER_URL}?{urlencode(query)}"
 
-        parsed_index = pd.to_datetime(series.index, format="%Y%m%d%H", errors="coerce", utc=True)
-        series = pd.to_numeric(series, errors="coerce")
-        series.index = parsed_index
-        series = series[~series.index.isna()]
+        try:
+            with urlopen(request_url, timeout=timeout) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            raise NASAServiceError(
+                f"NASA POWER request failed with status {exc.code}"
+            ) from exc
+        except URLError as exc:
+            raise NASAServiceError(f"NASA POWER request failed: {exc}") from exc
 
-        # NASA POWER uses <= -900 as missing-value sentinels.
-        series = series.mask(series <= -900)
-        series_by_column[column] = series
+        parameter_values = payload.get("properties", {}).get("parameter", {})
+        if not isinstance(parameter_values, dict):
+            raise NASAServiceError("NASA POWER response did not contain parameter data")
+
+        for column in chunk:
+            raw_values = parameter_values.get(column, {})
+            if not isinstance(raw_values, dict):
+                raw_values = {}
+
+            series = pd.Series(raw_values, name=column)
+            if series.empty:
+                series_by_column[column] = pd.Series(dtype="float64")
+                continue
+
+            parsed_index = pd.to_datetime(series.index, format="%Y%m%d%H", errors="coerce", utc=True)
+            series = pd.to_numeric(series, errors="coerce")
+            series.index = parsed_index
+            series = series[~series.index.isna()]
+
+            # NASA POWER uses <= -900 as missing-value sentinels.
+            series = series.mask(series <= -900)
+            series_by_column[column] = series
 
     if not series_by_column:
         return pd.DataFrame()
@@ -241,38 +264,28 @@ def _interpolate_to_five_min(
 
 
 def _build_rows_for_upsert(
-    dataset: str,
     frame: pd.DataFrame,
     latitude: float,
     longitude: float,
     community: str,
     timezone: str,
 ) -> list[tuple[Any, ...]]:
-    dataset_columns = DATASET_COLUMNS[dataset]
-    target_feature = TARGET_FEATURE_BY_DATASET.get(dataset)
-
     rows: list[tuple[Any, ...]] = []
     for timestamp, values in frame.iterrows():
-        feature_payload: dict[str, float | None] = {}
-        for column in dataset_columns:
-            if column == "DATETIME":
-                continue
-
-            if column in values.index and pd.notna(values[column]):
-                feature_payload[column] = float(values[column])
-            else:
-                feature_payload[column] = None
-
         rows.append(
             (
-                dataset,
+                WEATHER_EXOGENOUS_DATASET,
                 timestamp.to_pydatetime(),
                 latitude,
                 longitude,
                 community,
                 timezone,
-                target_feature,
-                Json(feature_payload),
+                None,
+                None,
+                *[
+                    float(values[column]) if column in values.index and pd.notna(values[column]) else None
+                    for column in WEATHER_EXOGENOUS_COLUMNS
+                ],
             )
         )
 
@@ -286,8 +299,13 @@ def _upsert_weather_rows(
     if not rows:
         return 0
 
+    feature_column_names = ",\n        ".join(f'"{column}"' for column in WEATHER_EXOGENOUS_COLUMNS)
+    feature_assignments = ",\n        ".join(
+        f'"{column}" = EXCLUDED."{column}"' for column in WEATHER_EXOGENOUS_COLUMNS
+    )
+
     upsert_query = """
-    INSERT INTO "WeatherExogenous" (
+    INSERT INTO "NASAPower" (
         dataset,
         timestamp,
         latitude,
@@ -295,7 +313,8 @@ def _upsert_weather_rows(
         community,
         time_standard,
         target_feature,
-        features
+        features,
+        {feature_columns}
     )
     VALUES %s
     ON CONFLICT (dataset, timestamp, latitude, longitude)
@@ -304,11 +323,20 @@ def _upsert_weather_rows(
         time_standard = EXCLUDED.time_standard,
         target_feature = EXCLUDED.target_feature,
         features = EXCLUDED.features,
+        {feature_assignments},
         updated_at = NOW()
     """
 
     with connection.cursor() as cursor:
-        execute_values(cursor, upsert_query, rows, page_size=500)
+        execute_values(
+            cursor,
+            upsert_query.format(
+                feature_columns=feature_column_names,
+                feature_assignments=feature_assignments,
+            ),
+            rows,
+            page_size=500,
+        )
     connection.commit()
     return len(rows)
 
@@ -342,15 +370,16 @@ def ensure_dataset_lookback(
     longitude = _normalize_coordinate(longitude)
 
     with psycopg2.connect(database_url, connect_timeout=5) as connection:
-        _ensure_weather_exogenous_table(connection)
+        _ensure_nasa_power_table(connection)
+        required_columns = _dataset_nasa_columns(dataset)
 
         existing_points, missing_points = _coverage_stats(
             connection=connection,
-            dataset=dataset,
             latitude=latitude,
             longitude=longitude,
             lookback_start=lookback_start,
             lookback_end=lookback_end,
+            required_columns=required_columns,
         )
 
         if missing_points == 0 and existing_points >= expected_points:
@@ -389,7 +418,6 @@ def ensure_dataset_lookback(
         ]
 
         rows = _build_rows_for_upsert(
-            dataset=dataset,
             frame=store_window,
             latitude=latitude,
             longitude=longitude,
@@ -400,11 +428,11 @@ def ensure_dataset_lookback(
 
         final_existing, final_missing = _coverage_stats(
             connection=connection,
-            dataset=dataset,
             latitude=latitude,
             longitude=longitude,
             lookback_start=lookback_start,
             lookback_end=lookback_end,
+            required_columns=required_columns,
         )
 
     return {
