@@ -102,7 +102,12 @@ function extractDetail(parsedBody: unknown, fallback: string): string {
 }
 
 function toIsoPayload(value: string): string {
-  const parsed = new Date(value);
+  const trimmed = value.trim();
+  const hasTimezone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(trimmed);
+  const isoInput = hasTimezone
+    ? trimmed
+    : `${trimmed.length === 16 ? `${trimmed}:00` : trimmed}Z`;
+  const parsed = new Date(isoInput);
   if (Number.isNaN(parsed.getTime())) {
     throw new ForecastApiError("Please choose a valid forecast start datetime.", 400);
   }

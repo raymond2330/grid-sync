@@ -36,6 +36,8 @@ function formatDate(timestamp: string): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
   });
 }
 
@@ -91,7 +93,7 @@ const initialDemandState: DemandFormState = {
 
 function formatDateTimeLocal(value: Date): string {
   const pad = (input: number): string => String(input).padStart(2, "0");
-  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+  return `${value.getUTCFullYear()}-${pad(value.getUTCMonth() + 1)}-${pad(value.getUTCDate())}T${pad(value.getUTCHours())}:${pad(value.getUTCMinutes())}`;
 }
 
 function parseFlexibleTimestamp(value: string): Date | null {
@@ -191,13 +193,13 @@ function SimpleLineChart({ data, color = "emerald" }: { data: { timestamp: strin
 
           {/* X Axis Labels */}
           <text x={paddingX} y={height - 10} fill="#64748b" textAnchor="start" className="text-[10px]">
-            {formatDate(data[0].timestamp)}
+            {formatDate(data[0].timestamp)} UTC
           </text>
           <text x={width / 2} y={height - 10} fill="#64748b" textAnchor="middle" className="text-[10px]">
-            {formatDate(data[Math.floor(data.length / 2)].timestamp)}
+            {formatDate(data[Math.floor(data.length / 2)].timestamp)} UTC
           </text>
           <text x={width - paddingX} y={height - 10} fill="#64748b" textAnchor="end" className="text-[10px]">
-            {formatDate(data[data.length - 1].timestamp)}
+            {formatDate(data[data.length - 1].timestamp)} UTC
           </text>
 
           {/* Area */}
@@ -254,7 +256,7 @@ function SimpleLineChart({ data, color = "emerald" }: { data: { timestamp: strin
               marginTop: '-16px'
             }}
           >
-            <div className="font-semibold mb-1 pb-1 border-b border-slate-600 block">{formatDate(data[hoverIndex].timestamp)}</div>
+            <div className="font-semibold mb-1 pb-1 border-b border-slate-600 block">{formatDate(data[hoverIndex].timestamp)} UTC</div>
             <div className="text-slate-200">
                Value: <span className="text-white font-mono font-medium">{formatPredictionValue(data[hoverIndex].value)}</span>
             </div>
@@ -324,7 +326,7 @@ function ForecastResultTable({ result, showDownload = false }: { result: Forecas
           <tbody className="divide-y divide-slate-100 bg-white">
             {result.predictions.slice(0, 20).map((point) => (
               <tr key={point.timestamp} className="hover:bg-slate-50">
-                <td className="px-4 py-2.5 text-slate-700">{point.timestamp}</td>
+                <td className="px-4 py-2.5 text-slate-700">{formatDate(point.timestamp)} UTC</td>
                 <td className="px-4 py-2.5 font-semibold text-slate-900">
                   {formatPredictionValue(point.value)}
                 </td>
@@ -412,6 +414,33 @@ export default function ForecastWorkspace() {
     () => autoWeatherDatasets.map((dataset) => weatherDatasetLabels[dataset]),
     [autoWeatherDatasets],
   );
+
+  const availableForecastDatasets: Record<string, string> = {
+    demand: "Demand",
+    price: "Price",
+    wind: "Wind",
+    solar: "Solar Irradiance",
+    temperature: "Air Temp",
+  };
+
+  type ForecastTab = keyof typeof availableForecastDatasets;
+
+  const initialTab: ForecastTab = "demand";
+
+  const [selectedTab, setSelectedTab] = useState<ForecastTab>(initialTab);
+
+  const filteredForecasts = useMemo(() => {
+    const allForecasts: { dataset: string; forecast: ForecastResponse; lookback?: LookbackResponse }[] = [];
+    
+    if (demandForecast) {
+      allForecasts.push({ dataset: "demand", forecast: demandForecast, lookback: demandLookback });
+    }
+    autoWeatherRuns.forEach((run) => {
+      allForecasts.push({ dataset: run.dataset, forecast: run.forecast, lookback: run.lookback });
+    });
+
+    return allForecasts.filter((f) => f.dataset === selectedTab);
+  }, [demandForecast, autoWeatherRuns, demandLookback, selectedTab]);
 
   async function handleDemandFileChange(event: ChangeEvent<HTMLInputElement>) {
     setDemandError(null);
@@ -698,27 +727,85 @@ export default function ForecastWorkspace() {
             </div>
           </form>
 
-          {demandLookback ? <div className="mt-5"><LookbackResultCard result={demandLookback} /></div> : null}
-          {demandForecast ? <div className="mt-5"><ForecastResultTable result={demandForecast} /></div> : null}
-          {autoWeatherRuns.length > 0 ? (
-            <div className="mt-5 space-y-4">
-              <p className="text-sm font-semibold text-slate-800">Automatic weather forecasts</p>
-              {autoWeatherRuns.map((run) => (
-                <div key={run.dataset} className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {weatherDatasetLabels[run.dataset]}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      target {run.forecast.target_feature} · run ID {run.forecast.run_id}
-                    </p>
-                  </div>
-                  <LookbackResultCard result={run.lookback} />
-                  <ForecastResultTable result={run.forecast} />
-                </div>
-              ))}
+          {/* Tabbed forecast results display */}
+          <div className="mt-6 space-y-4">
+            {/* Tab navigation */}
+            <div className="flex flex-wrap items-center gap-2 border-b border-slate-200">
+              {Object.entries(availableForecastDatasets).map(([key, label]) => {
+                const hasData = filteredForecasts.some((f) => f.dataset === key);
+                const isActive = selectedTab === key;
+                
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedTab(key as ForecastTab)}
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
+                      isActive
+                        ? "bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-sm"
+                        : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className={`h-1.5 w-1.5 rounded-full ${
+                      hasData 
+                        ? (isActive ? "bg-white" : "bg-slate-400") 
+                        : "bg-slate-200"
+                    }`} />
+                    <span>{label}</span>
+                    {hasData && (
+                      <span className={`ml-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        isActive ? "bg-white/20 text-white" : "bg-slate-200 text-slate-500"
+                      }`}>
+                        {autoWeatherRuns.filter(r => r.dataset === key).length}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          ) : null}
+            
+            {/* Forecasts display section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-800">
+                  {filteredForecasts.length > 0 
+                    ? `${filteredForecasts.length} forecast${filteredForecasts.length > 1 ? 's' : ''} for ${availableForecastDatasets[selectedTab]}`
+                    : "No forecasts available yet"}
+                </p>
+                {filteredForecasts.length > 0 && (
+                  <span className="text-xs text-slate-500">
+                    Switch tabs to view different forecast types
+                  </span>
+                )}
+              </div>
+              
+              {filteredForecasts.length > 0 ? (
+                filteredForecasts.map((f, index) => (
+                  <div key={f.dataset + index} className="space-y-3 rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50/30 p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1 flex-1">
+                        <p className="text-base font-semibold text-slate-900">
+                          {availableForecastDatasets[f.dataset]}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          target {f.forecast.target_feature} · run ID {f.forecast.run_id}
+                        </p>
+                      </div>
+                      {f.lookback && (
+                        <LookbackResultCard result={f.lookback} />
+                      )}
+                    </div>
+                    <ForecastResultTable result={f.forecast} />
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-8 text-center">
+                  <p className="text-sm text-slate-500">
+                    {availableForecastDatasets[selectedTab]} forecasts will appear here after running the forecast
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
           {autoWeatherErrors.length > 0 ? (
             <div className="mt-5 space-y-3">
               {autoWeatherErrors.map((errorMessage) => (
