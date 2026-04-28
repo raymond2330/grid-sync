@@ -59,7 +59,7 @@ export default function ForecastChart({
           viewBox={`0 0 ${width} ${height}`}
           className="h-auto w-full overflow-visible text-xs font-sans"
           role="img"
-          aria-label={`Forecast trend from ${formatDate(data[0].timestamp)} to ${formatDate(data[data.length - 1].timestamp)} UTC`}
+          aria-label={`Forecast trend from ${formatDate(data[0].timestamp)} to ${formatDate(data[data.length - 1].timestamp)} (local time)`}
         >
           <defs>
             <linearGradient id={defId} x1="0" y1="0" x2="0" y2="1">
@@ -96,13 +96,13 @@ export default function ForecastChart({
           })}
 
           <text x={paddingX} y={height - 10} fill="#64748b" textAnchor="start" className="text-[10px]">
-            {formatDate(data[0].timestamp)} UTC
+            {formatDate(data[0].timestamp)}
           </text>
           <text x={width / 2} y={height - 10} fill="#64748b" textAnchor="middle" className="text-[10px]">
-            {formatDate(data[Math.floor(data.length / 2)].timestamp)} UTC
+            {formatDate(data[Math.floor(data.length / 2)].timestamp)}
           </text>
           <text x={width - paddingX} y={height - 10} fill="#64748b" textAnchor="end" className="text-[10px]">
-            {formatDate(data[data.length - 1].timestamp)} UTC
+            {formatDate(data[data.length - 1].timestamp)}
           </text>
 
           <path
@@ -173,7 +173,7 @@ export default function ForecastChart({
             }}
           >
             <div className="mb-1 block border-b border-slate-600 pb-1 font-semibold">
-              {formatDate(data[hoverIndex].timestamp)} UTC
+              {formatDate(data[hoverIndex].timestamp)}
             </div>
             <div className="text-slate-200">
               Value:{" "}

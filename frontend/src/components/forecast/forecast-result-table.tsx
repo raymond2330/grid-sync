@@ -88,7 +88,7 @@ export default function ForecastResultTable({
             {result.predictions.slice(0, 20).map((point) => (
               <tr key={point.timestamp} className="hover:bg-slate-50">
                 <td className="px-4 py-2.5 text-slate-700">
-                  {formatDate(point.timestamp)} UTC
+                  {formatDate(point.timestamp)}
                 </td>
                 <td className="px-4 py-2.5 font-semibold text-slate-900">
                   {formatPredictionValue(point.value)}

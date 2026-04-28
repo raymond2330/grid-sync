@@ -28,8 +28,8 @@ import {
 
 const initialDemandState: DemandFormState = {
   forecastStart: "",
-  latitude: "14.5995",
-  longitude: "120.9842",
+  latitude: "13.754047755292186",
+  longitude: "121.06026790342588",
   csvFile: null,
 };
 
