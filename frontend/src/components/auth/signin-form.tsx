@@ -22,6 +22,7 @@ export default function SigninForm() {
   const [form, setForm] = useState<SignInFormState>(initialFormState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const errorId = "signin-error";
 
   const canSubmit =
     form.email.trim().length > 0 && form.password.length >= 8 && !isSubmitting;
@@ -73,39 +74,46 @@ export default function SigninForm() {
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div>
             <label className="space-y-2 text-sm text-slate-700" htmlFor="signin-email">
-                <span className="font-medium">Email</span>
-                <input
+              <span className="font-medium">Email</span>
+              <input
                 id="signin-email"
                 type="email"
                 value={form.email}
                 onChange={(event) => {
-                    setForm((prev) => ({ ...prev, email: event.target.value }));
+                  setForm((prev) => ({ ...prev, email: event.target.value }));
                 }}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-cyan-200 transition focus:border-cyan-400 focus:ring"
                 autoComplete="email"
                 required
-                />
+              />
             </label>
 
             <label className="space-y-2 text-sm text-slate-700" htmlFor="signin-password">
-                <span className="font-medium">Password</span>
-                <input
+              <span className="font-medium">Password</span>
+              <input
                 id="signin-password"
                 type="password"
                 value={form.password}
                 onChange={(event) => {
-                    setForm((prev) => ({ ...prev, password: event.target.value }));
+                  setForm((prev) => ({ ...prev, password: event.target.value }));
                 }}
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-cyan-200 transition focus:border-cyan-400 focus:ring"
                 autoComplete="current-password"
                 minLength={8}
+                aria-invalid={serverError ? "true" : "false"}
+                aria-describedby={serverError ? errorId : undefined}
                 required
-                />
+              />
             </label>
           </div>
 
           {serverError ? (
-            <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <p
+              id={errorId}
+              className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+              role="alert"
+              aria-live="polite"
+            >
               {serverError}
             </p>
           ) : null}

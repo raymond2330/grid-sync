@@ -28,6 +28,7 @@ export default function SignupForm() {
   const [form, setForm] = useState<SignUpFormState>(initialFormState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const errorId = "signup-error";
 
   const passwordMismatch = useMemo(
     () =>
@@ -170,13 +171,15 @@ export default function SignupForm() {
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-900 outline-none ring-teal-200 transition focus:border-teal-400 focus:ring"
                 autoComplete="new-password"
                 minLength={8}
+                aria-invalid={passwordMismatch || serverError ? "true" : "false"}
+                aria-describedby={passwordMismatch || serverError ? errorId : undefined}
                 required
               />
             </label>
           </div>
 
           {passwordMismatch || serverError ? (
-            <div className="space-y-3">
+            <div id={errorId} className="space-y-3" role="alert" aria-live="polite">
               {passwordMismatch ? (
                 <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                   Passwords must match before you can submit.
